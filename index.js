@@ -127,11 +127,15 @@ const bwMap = {
 const owlcmsRecords = [];
 
 readdirSync('data').forEach((path) => {
+    if (!path.endsWith('.csv')) {
+        return;
+    }
+
     const recordsCsv = readFileSync(join('data', path), {
         encoding: 'utf-8',
     });
 
-    const gender = path.includes('women') ? 'F' : 'M';
+    const gender = path.includes('Women') ? 'F' : 'M';
 
     let ageGroup;
     let ageLow;
@@ -140,15 +144,15 @@ readdirSync('data').forEach((path) => {
     let bwCat;
     let isYouth = false;
 
-    if (path.includes('masters')) {
+    if (path.includes('Masters')) {
         ageGroup = /\d+\+?/.exec(path)[0];
         ageLow = parseInt(ageGroup);
         ageCat = ageGroup.endsWith('+') ? 999 : ageLow + 4;
         ageGroup = gender + ageGroup;
-    } else if (path.includes('senior')) {
+    } else if (path.includes('Senior')) {
         ageGroup = 'SR';
         ageLow = 15;
-    } else if (path.includes('junior')) {
+    } else if (path.includes('Junior')) {
         ageGroup = 'JR';
         ageLow = 15;
         ageCat = 20;
@@ -156,7 +160,13 @@ readdirSync('data').forEach((path) => {
         isYouth = true;
     }
 
-    parse(recordsCsv).forEach((record) => {
+    parse(recordsCsv, {
+        trim: true,
+    }).forEach((record, index) => {
+        if (index === 0) {
+            return;
+        }
+
         if (!RECORD_TYPES.has(record[0])) {
             if (isYouth) {
                 [ageGroup, bwCat] = record[0].split(' ');

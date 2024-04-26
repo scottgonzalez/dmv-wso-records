@@ -1,3 +1,7 @@
+import readExcelFile, {
+    readSheetNames,
+} from 'read-excel-file/node';
+import writeExcelFile from 'write-excel-file/node';
 import { parse } from 'csv-parse/sync';
 import { stringify } from 'csv-stringify/sync';
 import {
@@ -8,212 +12,154 @@ import {
 import {
     join,
 } from 'path';
+import {
+    AGE_GROUP_MAP,
+    BODY_WEIGHT_MAP,
+    RECORD_TYPES,
+    YOUTH_AGES,
+} from './constants.js';
 
-const RECORD_TYPES = new Set([
-    'Snatch',
-    'Clean & Jerk',
-    'Total',
-]);
+const wsoExcelPath = 'dmv-wso-records.xlsx';
 
-const ageGroupMap = new Map([
-    ['13U', 'U13'],
-    ['14-15', 'U15'],
-    ['16-17', 'U17'],
-]);
+async function downloadRecords() {
+    const response = await fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vTEQRRHeyO5Hs3ygRlo8M8dsN1p1YG_ZJjdTxktnB_sn6ppI4_mzWf1NgUzA7IUggenGD7AGvZ-n-zf/pub?output=xlsx');
+    const content = await response.arrayBuffer();
 
-const youthAges = new Map([
-    ['U13', [0, 13]],
-    ['U15', [14, 15]],
-    ['U17', [16, 17]],
-])
+    writeFileSync(wsoExcelPath, Buffer.from(content));
+}
 
-const bwMap = {
-    'U13': {
-        F: new Map([
-            ['30', 0],
-            ['33', 30],
-            ['36', 33],
-            ['40', 36],
-            ['45', 40],
-            ['49', 45],
-            ['55', 49],
-            ['59', 55],
-            ['64', 59],
-        ]),
-        M: new Map([
-            ['32', 0],
-            ['36', 32],
-            ['39', 36],
-            ['44', 39],
-            ['49', 44],
-            ['55', 49],
-            ['61', 55],
-            ['67', 61],
-            ['73', 67],
-        ]),
-    },
-    'U15': {
-        F: new Map([
-            ['36', 0],
-            ['40', 36],
-            ['45', 40],
-            ['49', 45],
-            ['55', 49],
-            ['59', 55],
-            ['64', 59],
-            ['71', 64],
-            ['76', 71],
-        ]),
-        M: new Map([
-            ['39', 0],
-            ['44', 39],
-            ['49', 44],
-            ['55', 49],
-            ['61', 55],
-            ['67', 61],
-            ['73', 67],
-            ['81', 73],
-            ['89', 81],
-        ]),
-    },
-    'U17': {
-        F: new Map([
-            ['40', 36],
-            ['45', 40],
-            ['49', 45],
-            ['55', 49],
-            ['59', 55],
-            ['64', 59],
-            ['71', 64],
-            ['76', 71],
-            ['81', 76],
-        ]),
-        M: new Map([
-            ['49', 44],
-            ['55', 49],
-            ['61', 55],
-            ['67', 61],
-            ['73', 67],
-            ['81', 73],
-            ['89', 81],
-            ['96', 89],
-            ['102', 96],
-        ]),
-    },
-    F: new Map([
-        ['45', 0],
-        ['49', 45],
-        ['55', 49],
-        ['59', 55],
-        ['64', 59],
-        ['71', 64],
-        ['76', 71],
-        ['81', 76],
-        ['87', 81],
-    ]),
-    M: new Map([
-        ['55', 0],
-        ['61', 55],
-        ['67', 61],
-        ['73', 67],
-        ['81', 73],
-        ['89', 81],
-        ['96', 89],
-        ['102', 96],
-        ['109', 102],
-    ]),
-};
+async function processRecords() {
+    const owlcmsRecords = [];
 
-const owlcmsRecords = [];
+    const sheetNames = await readSheetNames(wsoExcelPath);
+    await Promise.all(sheetNames.map(async (sheetName) => {
+        const gender = sheetName.includes('Women') ? 'F' : 'M';
 
-readdirSync('data').forEach((path) => {
-    if (!path.endsWith('.csv')) {
-        return;
-    }
+        let ageGroup;
+        let ageMin;
+        let ageMax = 999;
+        let bodyWeightMin;
+        let bodyWeightMax;
+        let isYouth = false;
 
-    const recordsCsv = readFileSync(join('data', path), {
-        encoding: 'utf-8',
-    });
-
-    const gender = path.includes('Women') ? 'F' : 'M';
-
-    let ageGroup;
-    let ageLow;
-    let ageCat = 999;
-    let bwLow;
-    let bwCat;
-    let isYouth = false;
-
-    if (path.includes('Masters')) {
-        ageGroup = /\d+\+?/.exec(path)[0];
-        ageLow = parseInt(ageGroup);
-        ageCat = ageGroup.endsWith('+') ? 999 : ageLow + 4;
-        ageGroup = gender + ageGroup;
-    } else if (path.includes('Senior')) {
-        ageGroup = 'SR';
-        ageLow = 15;
-    } else if (path.includes('Junior')) {
-        ageGroup = 'JR';
-        ageLow = 15;
-        ageCat = 20;
-    } else {
-        isYouth = true;
-    }
-
-    parse(recordsCsv, {
-        trim: true,
-    }).forEach((record, index) => {
-        if (index === 0) {
-            return;
+        if (sheetName.includes('Masters')) {
+            ageGroup = /\d+\+?/.exec(sheetName)[0];
+            ageMin = parseInt(ageGroup);
+            ageMax = ageGroup.endsWith('+') ? 999 : ageMin + 4;
+            ageGroup = gender + ageGroup;
+        } else if (sheetName.includes('Senior')) {
+            ageGroup = 'SR';
+            ageMin = 15;
+        } else if (sheetName.includes('Junior')) {
+            ageGroup = 'JR';
+            ageMin = 15;
+            ageMax = 20;
+        } else {
+            isYouth = true;
         }
 
-        if (!RECORD_TYPES.has(record[0])) {
-            if (isYouth) {
-                [ageGroup, bwCat] = record[0].split(' ');
-                ageGroup = ageGroupMap.get(ageGroup);
-                [ageLow, ageCat] = youthAges.get(ageGroup);
-            } else {
-                [bwCat] = record[0].split(' ');
-            }
-
-            if (bwCat.endsWith('+')) {
-                bwLow = bwCat.substring(0, bwCat.length - 1);
-                bwCat = 999;
-            } else {
-                if (isYouth) {
-                    bwLow = bwMap[ageGroup][gender].get(bwCat);
-                } else {
-                    bwLow = bwMap[gender].get(bwCat);
-                }
-            }
-
-            return;
-        }
-
-        if (record[1] === 'None Established') {
-            return;
-        }
-
-        owlcmsRecords.push({
-            Federation: 'DMV',
-            RecordName: 'DMV',
-            AgeGroup: ageGroup,
-            Gender: gender,
-            ageLow,
-            ageUpper: ageCat,
-            bwLow,
-            bwUpper: bwCat,
-            Lift: record[0],
-            Record: record[3],
-            Name: record[1],
-            Born: '',
-            Nation: '',
-            Date: new Date(record[4]).toISOString().substring(0, 10),
-            Place: record[6],
+        const records = await readExcelFile(wsoExcelPath, {
+            sheet: sheetName
         });
-    });
-});
+        records.forEach((record, index) => {
+            if (index === 0) {
+                return;
+            }
 
-writeFileSync('owlcms-records.csv', stringify(owlcmsRecords, {
-    header: true,
-}));
+            if (!RECORD_TYPES.has(record[0])) {
+                if (isYouth) {
+                    [ageGroup, bodyWeightMax] = record[0].split(' ');
+                    ageGroup = AGE_GROUP_MAP.get(ageGroup);
+                    [ageMin, ageMax] = YOUTH_AGES.get(ageGroup);
+                } else {
+                    [bodyWeightMax] = record[0].split(' ');
+                }
+
+                if (bodyWeightMax.endsWith('+')) {
+                    bodyWeightMin = parseInt(bodyWeightMax.substring(0, bodyWeightMax.length - 1));
+                    bodyWeightMax = 999;
+                } else {
+                    if (isYouth) {
+                        bodyWeightMin = BODY_WEIGHT_MAP[ageGroup][gender].get(bodyWeightMax);
+                    } else {
+                        bodyWeightMin = BODY_WEIGHT_MAP[gender].get(bodyWeightMax);
+                    }
+                }
+
+                return;
+            }
+
+            function addRecord({
+                date,
+                lift,
+                name,
+                place,
+                record,
+            }) {
+                owlcmsRecords.push({
+                    federation: 'DMV',
+                    recordName: 'DMV',
+                    ageGroup,
+                    gender,
+                    ageMin,
+                    ageMax,
+                    bodyWeightMin,
+                    bodyWeightMax,
+                    lift,
+                    record,
+                    name,
+                    date,
+                    place,
+                });
+            }
+
+            if (record[1] === 'None Established') {
+                addRecord({
+                    date: '2015-01-01',
+                    lift: record[0],
+                    name: 'STANDARD',
+                    place: '',
+                    record: 1,
+                });
+
+                return;
+            }
+
+            addRecord({
+                date: new Date(record[4]).toISOString().substring(0, 10),
+                lift: record[0],
+                name: record[1],
+                place: record[6],
+                record: record[3],
+            });
+        });
+    }));
+
+    return owlcmsRecords;
+}
+
+async function writeRecords(records) {
+    await writeExcelFile(
+        [
+            Object.keys(records[0]).map((key) => {
+                return {
+                    value: key,
+                };
+            }),
+            ...records.map((record) => {
+                return Object.keys(record).map((key) => {
+                    return {
+                        value: record[key],
+                    };
+                });
+            }),
+        ],
+        {
+            filePath: 'owlcms-records.xlsx',
+        },
+    );
+}
+
+await downloadRecords();
+const records = await processRecords();
+await writeRecords(records);

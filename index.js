@@ -77,7 +77,7 @@ async function processRecords() {
 
                 if (bodyWeightMax.endsWith('+')) {
                     bodyWeightMin = parseInt(bodyWeightMax.substring(0, bodyWeightMax.length - 1));
-                    bodyWeightMax = 999;
+                    bodyWeightMax = `>${bodyWeightMin}`;
                 } else {
                     if (isYouth) {
                         bodyWeightMin = BODY_WEIGHT_MAP[ageGroup][gender].get(bodyWeightMax);

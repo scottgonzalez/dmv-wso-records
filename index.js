@@ -2,8 +2,6 @@ import readExcelFile, {
     readSheetNames,
 } from 'read-excel-file/node';
 import writeExcelFile from 'write-excel-file/node';
-import { parse } from 'csv-parse/sync';
-import { stringify } from 'csv-stringify/sync';
 import {
     readdirSync,
     readFileSync,
@@ -19,10 +17,22 @@ import {
     YOUTH_AGES,
 } from './constants.js';
 
-const wsoExcelPath = 'dmv-wso-records.xlsx';
+const wso = 'ohio';
+const wsos = {
+    dmv: {
+        official: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTEQRRHeyO5Hs3ygRlo8M8dsN1p1YG_ZJjdTxktnB_sn6ppI4_mzWf1NgUzA7IUggenGD7AGvZ-n-zf/pub?output=xlsx',
+    },
+    ohio: {
+        official: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSpK9vU5Rr60wxr9r85KYW1VmHqB564zXmod_crL73LqYCatLmGOo7cdOsWvu319HspCxnB3WmXa2tw/pub?output=xlsx'
+    }
+}
+
+const googlePath = wsos[wso].official;
+const wsoExcelPath = `${wso}-wso-records.xlsx`;
+const owlcmsPath = `${wso}-owlcms-records.xlsx`;
 
 async function downloadRecords() {
-    const response = await fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vTEQRRHeyO5Hs3ygRlo8M8dsN1p1YG_ZJjdTxktnB_sn6ppI4_mzWf1NgUzA7IUggenGD7AGvZ-n-zf/pub?output=xlsx');
+    const response = await fetch(googlePath);
     const content = await response.arrayBuffer();
 
     writeFileSync(wsoExcelPath, Buffer.from(content));
@@ -155,7 +165,7 @@ async function writeRecords(records) {
             }),
         ],
         {
-            filePath: 'owlcms-records.xlsx',
+            filePath: owlcmsPath,
         },
     );
 }

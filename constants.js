@@ -103,6 +103,7 @@ export const BODY_WEIGHT_MAP = {
 
 export const RECORD_TYPES = new Set([
     'Snatch',
+    'C&Jerk',
     'Clean & Jerk',
     'Total',
 ]);
